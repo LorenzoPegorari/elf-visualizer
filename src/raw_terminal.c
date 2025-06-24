@@ -205,6 +205,8 @@ unsigned char term_loop(void) {
         flag = process_keypress();
     }
     while (flag == PROCESS_KEYPRESS_ACT || flag == PROCESS_KEYPRESS_IGNORE);
+    term.active_mode = NULL;
+    refresh_screen();
 
     if (flag == PROCESS_KEYPRESS_QUIT)
         return 0;
@@ -401,12 +403,14 @@ static void draw_rows(abuf_t *ab) {
     bytes = 0;
     for (y = 0; y < term.screen_rows; y++) {
 
-        bytes += term.active_mode->write_func(ab, term.active_mode->row_len);
+        if (term.active_mode != NULL)
+            bytes += term.active_mode->write_func(ab, term.active_mode->row_len);
 
         ab_append(ab, VT100_ERASE_LINE, sizeof(VT100_ERASE_LINE) - 1);
         if (y < term.screen_rows - 1)
             ab_append(ab, "\r\n", 2);
     }
 
-    file_move(-1 * ((long int)bytes));  /* DANGEROUS: size_t to long int */
+    if (term.active_mode != NULL)
+        file_move(-1 * ((long int)bytes));  /* DANGEROUS: size_t to long int */
 }

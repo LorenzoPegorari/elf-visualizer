@@ -4,7 +4,6 @@
 
 - Comment file.h and file.c functions
 - Comment refresh_screen() and draw_rows()
-- Add refresh_screen() after exiting main_loop()
 - Add file text buffer to fread a chunk of bytes, and then read from there (avoiding many fread() and malloc()/free())
 - Implement generate_elf_table() (maybe with different thread?) 
 
