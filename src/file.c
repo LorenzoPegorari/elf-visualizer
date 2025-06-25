@@ -12,6 +12,9 @@
 
 /*#define BUFFER_SIZE 256*/
 
+#define CHAR_TO_HEX_UPPER(c) ((((c) & 0xF0) >> 4) < '\xA' ? ((((c) & 0xF0) >> 4) + '0') : ((((c) & 0xF0) >> 4) + 'A' - '\xA'))
+#define CHAR_TO_HEX_LOWER(c) (((c) & 0x0F) < '\xA' ? (((c) & 0x0F) + '0') : (((c) & 0x0F) + 'A' - '\xA'))
+
 #define FILE_TAG_INIT   {0, 0, NULL}
 
 /*
@@ -120,18 +123,19 @@ size_t file_append_hexs(abuf_t *ab, const size_t len) {
         return 0;
     }
 
-    if ((temp_long = malloc(n_chars_read * 3)) == NULL)
+    if ((temp_long = malloc(n_chars_read * 3 - 1)) == NULL)
         return 0;
 
     for (i = 0; i < n_chars_read; i++) {
-        sprintf(&temp_long[i * 3], "%02X", temp.b[i]);
+        temp_long[i * 3] = CHAR_TO_HEX_UPPER(temp.b[i]);
+        temp_long[i * 3 + 1] = CHAR_TO_HEX_LOWER(temp.b[i]);
         if (i < n_chars_read - 1)
             temp_long[i * 3 + 2] = ' ';
     }
 
     ab_free(&temp);
 
-    if (ab_append(ab, temp_long, n_chars_read * 3 - 1)) {
+    if (ab_append(ab, temp_long, n_chars_read * 3 - 1) == 1) {
         free(temp_long);
         return 0;
     }
