@@ -67,7 +67,6 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    printf("test\r\n");
     /* Initialize exit_handler function */
     atexit(handle_exit);
 

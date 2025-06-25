@@ -28,9 +28,9 @@
 #define STARTING_MODE  &mode_hex
 
 #define PROCESS_KEYPRESS_IGNORE  0
-#define PROCESS_KEYPRESS_ACT     0
-#define PROCESS_KEYPRESS_QUIT    1
-#define PROCESS_KEYPRESS_ERROR   2
+#define PROCESS_KEYPRESS_ACT     1
+#define PROCESS_KEYPRESS_QUIT    2
+#define PROCESS_KEYPRESS_ERROR   3
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -113,9 +113,9 @@ static unsigned char process_keypress(void);
  */
 static unsigned char read_key(char *c);
 
-static void refresh_screen(void);
+static unsigned char refresh_screen(void);
 
-static void draw_rows(abuf_t *ab);
+static unsigned char draw_rows(abuf_t *ab);
 
 
 /* -------------------- GLOBAL FUNCTIONS -------------------- */
@@ -200,17 +200,22 @@ unsigned char term_loop(void) {
 
     flag = PROCESS_KEYPRESS_ACT;
     do {
-        if (flag == PROCESS_KEYPRESS_ACT)
-            refresh_screen();
+        if (flag == PROCESS_KEYPRESS_ACT) {
+            if (refresh_screen() == 1) {
+                flag = PROCESS_KEYPRESS_ERROR;
+                break;
+            }
+        }
         flag = process_keypress();
     }
     while (flag == PROCESS_KEYPRESS_ACT || flag == PROCESS_KEYPRESS_IGNORE);
     term.active_mode = NULL;
-    refresh_screen();
+    if (refresh_screen() == 1)
+        flag = PROCESS_KEYPRESS_ERROR;
 
     if (flag == PROCESS_KEYPRESS_QUIT)
         return 0;
-    return PROCESS_KEYPRESS_ERROR;
+    return 1;
 }
 
 /* -------------------- STATIC FUNCTIONS -------------------- */
@@ -382,21 +387,27 @@ static unsigned char read_key(char *c) {
 
 /* OUTPUT */
 
-static void refresh_screen(void) {
+static unsigned char refresh_screen(void) {
     abuf_t ab = ABUF_INIT;
 
-    ab_append(&ab, VT100_CUR_HIDE, sizeof(VT100_CUR_HIDE) - 1);
-    ab_append(&ab, VT100_CUR_TOP_L, sizeof(VT100_CUR_TOP_L) - 1);
+    if (ab_append(&ab, VT100_CUR_HIDE, sizeof(VT100_CUR_HIDE) - 1) == 1)
+        return 1;
+    if (ab_append(&ab, VT100_CUR_TOP_L, sizeof(VT100_CUR_TOP_L) - 1) == 1)
+        return 1;
     draw_rows(&ab);
-    ab_append(&ab, VT100_CUR_TOP_L, sizeof(VT100_CUR_TOP_L) - 1);
-    ab_append(&ab, VT100_CUR_SHOW, sizeof(VT100_CUR_SHOW) - 1);
+    if (ab_append(&ab, VT100_CUR_TOP_L, sizeof(VT100_CUR_TOP_L) - 1) == 1)
+        return 1;
+    if (ab_append(&ab, VT100_CUR_SHOW, sizeof(VT100_CUR_SHOW) - 1) == 1)
+        return 1;
 
-    write(STDOUT_FILENO, ab.b, ab.len);
+    if (write(STDOUT_FILENO, ab.b, ab.len) == -1)
+        return 1;
 
     ab_free(&ab);
+    return 0;
 }
 
-static void draw_rows(abuf_t *ab) {
+static unsigned char draw_rows(abuf_t *ab) {
     size_t bytes;
     unsigned int y;
 
@@ -406,11 +417,17 @@ static void draw_rows(abuf_t *ab) {
         if (term.active_mode != NULL)
             bytes += term.active_mode->write_func(ab, term.active_mode->row_len);
 
-        ab_append(ab, VT100_ERASE_LINE, sizeof(VT100_ERASE_LINE) - 1);
-        if (y < term.screen_rows - 1)
-            ab_append(ab, "\r\n", 2);
+        if (ab_append(ab, VT100_ERASE_LINE, sizeof(VT100_ERASE_LINE) - 1) == 1)
+            return 1;
+        if (y < term.screen_rows - 1) {
+            if (ab_append(ab, "\r\n", 2) == 1)
+                return 1;
+        }
     }
 
-    if (term.active_mode != NULL)
-        file_move(-1 * ((long int)bytes));  /* DANGEROUS: size_t to long int */
+    if (term.active_mode != NULL) {
+        if (file_move(-1 * ((long int)bytes)) == 0)  /* DANGEROUS: converting size_t to long int */
+            return 1;
+    }
+    return 0;
 }
