@@ -70,6 +70,7 @@ static struct terminal_tag {
     term_mode_t *active_mode;
     unsigned int screen_rows;
     unsigned int screen_cols;
+    unsigned int cols_diff;
     struct termios initial_state;  /* for preservation of initial state */
 } term;
 
@@ -82,8 +83,8 @@ static struct terminal_tag {
  */
 static void sigwinch_handler(int sig);
 
-/* Sets row_len of term_mode_t variables based on terminal window size */
-static void set_modes_row_len(void);
+/* Sets row_len and pos of term_mode_t variables based on terminal window size */
+static unsigned char set_modes_row_len_and_pos(void);
 
 /* 
  * Uses ioctl() (inside sys/ioctl.h) to get terminal window size
@@ -229,8 +230,15 @@ static void sigwinch_handler(int sig) {
                 sig_winch.error_detected = 1;
                 break;
             }
+            if (set_modes_row_len_and_pos() == 1) {
+                sig_winch.error_detected = 1;
+                break;
+            }
+            if (refresh_screen() == 1) {
+                sig_winch.error_detected = 1;
+                break;
+            }
             sig_winch.error_detected = 0;
-            set_modes_row_len();
             break;
 
         default:
@@ -240,10 +248,22 @@ static void sigwinch_handler(int sig) {
 
 /* TERMINAL */
 
-static void set_modes_row_len(void) {
+static unsigned char set_modes_row_len_and_pos(void) {
+    if (change_mode(term.active_mode->name) == 1)
+        return 1;
+
     mode_hex.row_len = term.screen_cols / 3;
     mode_form_char.row_len = term.screen_cols / 3;
     mode_char.row_len = term.screen_cols;
+
+    /* DANGEROUS: dividing/multiplying long int by unsigned int */
+    mode_hex.pos = (mode_hex.pos / (long int)mode_hex.row_len) * (long int)mode_hex.row_len;
+    mode_form_char.pos = (mode_form_char.pos / (long int)mode_form_char.row_len) * (long int)mode_form_char.row_len;
+    mode_char.pos = (mode_char.pos / (long int)mode_char.row_len) * (long int)mode_char.row_len;
+    
+    if (file_seek_set(term.active_mode->pos) == 1)
+        return 1;
+    return 0;
 }
 
 static unsigned char get_term_win_size(void) {
